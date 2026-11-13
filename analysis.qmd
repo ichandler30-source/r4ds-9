@@ -1,0 +1,14 @@
+---
+title: "Wildfires"
+author: "Isabella Chandler"
+execute:
+  echo: false
+---
+
+```{r}
+#| message: false
+library(tidyverse)
+library(purrr)
+library(leaflet)
+library(jsonlite)
+```
