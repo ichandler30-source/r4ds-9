@@ -12,3 +12,80 @@ library(purrr)
 library(leaflet)
 library(jsonlite)
 ```
+
+```{r}
+raw <- fromJSON("data/wildfires.geojson")
+print(nrow(raw$features))
+```
+
+```{r}
+fire <- raw$features[1, ]
+print(names(fire))
+print(fire$geometry$coordinates[[1]][1, 1, ])
+```
+
+```{r}
+#| cache: true
+fires <- raw$features |>
+  unpack(geometry, names_sep = "_") |>
+  unpack(properties) |>
+  select(incident, gis_acres, fire_year, agency, state, geometry_coordinates) |>
+  mutate(
+    gis_acres = as.numeric(gis_acres),
+    fire_year = as.integer(fire_year)
+  )
+```
+
+```{r}
+august_fires <- fires |>
+  filter(str_detect(incident, "August"))
+
+print(nrow(august_fires))
+
+fires |>
+  slice_max(gis_acres, n = 10, with_ties = FALSE) |>
+  select(incident, gis_acres, fire_year, agency, state)
+```
+
+```{r}
+big_fires <- fires |>
+  filter(gis_acres >= 100000) |>
+  mutate(
+    lon = map_dbl(geometry_coordinates, \(coords) mean(coords[1, , 1])),
+    lat = map_dbl(geometry_coordinates, \(coords) mean(coords[1, , 2]))
+  )
+```
+
+```{r}
+top_fires <- big_fires |>
+  slice_max(gis_acres, n = 10, with_ties = FALSE)
+
+all_lons <- unlist(map(top_fires$geometry_coordinates, \(coords) coords[1, , 1]))
+all_lats <- unlist(map(top_fires$geometry_coordinates, \(coords) coords[1, , 2]))
+
+fire_map <- leaflet() |>
+  addTiles()
+
+for (i in seq_len(nrow(top_fires))) {
+  coords <- top_fires$geometry_coordinates[[i]]
+  fire_map <- fire_map |>
+    addPolygons(
+      lng = coords[1, , 1],
+      lat = coords[1, , 2],
+      popup = paste0(
+        top_fires$incident[i], "<br>",
+        "Year: ", top_fires$fire_year[i], "<br>",
+        "Acres: ", format(round(top_fires$gis_acres[i]), big.mark = ",")
+      ),
+      fillOpacity = 0.4
+    )
+}
+
+fire_map |>
+  fitBounds(
+    lng1 = min(all_lons),
+    lat1 = min(all_lats),
+    lng2 = max(all_lons),
+    lat2 = max(all_lats)
+  )
+```
